@@ -1,0 +1,5 @@
+recursive-include pretix_mbway/static *
+recursive-include pretix_mbway/templates *
+recursive-include pretix_mbway/locale *
+include LICENSE
+exclude .gitlab-ci.yml
