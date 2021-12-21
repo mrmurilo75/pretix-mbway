@@ -71,3 +71,57 @@ class MBWAY(BasePaymentProvider):
         super().__init__(event)
         self.settings = SettingsSandbox('payment', 'mbway', event)
 
+    @property
+    def test_mode_message(self):
+        if self.settings.environment == 'test':
+            return _('The MB Way Plugin is being used in test mode')
+        return None
+
+    @property
+    def settings_form_fields(self):
+        fields = [
+            ('ifthenpay_gateway_key',
+             forms.CharField(
+                 label=_('IfThenPay Gateway Key'),
+                 required=True,
+                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
+                     text=_('Click here for more information'),
+                     docs_url='https://helpdesk.ifthenpay.com/en/support/solutions/articles/79000128524-api-generate-paybylink-url'
+                 )
+             )),
+            ('mb_way_key',
+             forms.CharField(
+                 label=_('MB WAY Key'),
+                 required=True,
+                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
+                     text=_('Click here for more information'),
+                     docs_url='https://helpdesk.ifthenpay.com/en/support/solutions/articles/79000128524-api-generate-paybylink-url'
+                 )
+             )),
+            ('environment',
+             forms.ChoiceField(
+                 label=_('Environment'),
+                 initial='live',
+                 choices=(
+                     ('live', 'Live'),
+                     ('test', 'Test'),
+                 ),
+             )),
+        ]
+
+        extra_fields = [
+            ('description',
+             forms.CharField(
+                 label=_('Reference description'),
+                 help_text=_('Any value entered here will be added to the call'),
+                 required=False,
+             )),
+        ]
+
+        d = OrderedDict(
+            fields + extra_fields + list(super().settings_form_fields.items())
+        )
+
+        d.move_to_end('description')
+        d.move_to_end('_enabled', False)
+        return d
