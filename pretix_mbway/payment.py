@@ -147,27 +147,32 @@ class MBWAY(BasePaymentProvider):
         return template.render(ctx)
 
     def get_order_id(self, payment: OrderPayment) -> str:
+        if not payment.info:
+            payment.info = '{}'
+        old = json.loads(payment.info)
         try:
-            payment.info_data['order_id']
+            old['order_id']
         except KeyError:
-            new_info = payment.info_data['order_id'] = f'{payment.local_id % (10 ** 15) : 04d}'
-            payment.info_data( new_info )
-            payment.save()
-        return payment.info_data['order_id']
+            old['order_id'] = f'{payment.local_id % (10 ** 15) : 04d}'
+            payment.info = json.dumps(old)
+            payment.save(update_fields=['info'])
+        return old['order_id']
 
-    def _format_value(self, value: float):
+    def _format_price(self, value: float):
         return f'{value: .2f}'
 
     def get_expire_date(self, payment: OrderPayment):
+        if not payment.info:
+            payment.info = '{}'
+        old = json.loads(payment.info)
         try:
-            payment.info_data['expire_date']
+            old['expire_date']
         except KeyError:
             today = now()
-            new_info = payment.info_data['expire_date'] = f'{today.year}{today.month}{today.day}'
-            payment.info_data(new_info)
-            payment.save()
-        return payment.info_data['expire_date']
-
+            old['expire_date'] = f'{today.year}{today.month}{today.day}'
+            payment.info = json.dumps(old)
+            payment.save(update_fields=['info'])
+        return old['expire_date']
 
     def execute_payment(self, request: HttpRequest, payment: OrderPayment) -> str:
         key_gateway = self.settings.get('ifthenpay_gateway_key', '')
@@ -246,15 +251,16 @@ class MBWAY(BasePaymentProvider):
         return self.get_order_id(payment)
 
     def shred_payment_info(self, obj: Union[OrderPayment, OrderRefund]):
-        old = obj.info_data
-        new = {}
-        try:
-            new['order_id'] = old['order_id']
-            new['expire_date'] = old['expire_date']
-        except KeyError:
-            pass
-        obj.info_data( new )
-        obj.save()
+        if obj.info:
+            new = {}
+            order_id = obj.info_data.get('order_id', '')
+            if order_id != '':
+                new['order_id'] = order_id
+            expire_date = obj.info_data.get('expire_date', '')
+            if expire_date != '':
+                new['expire_date'] = expire_date
+            obj.info_data = new
+            obj.save(update_fields=['info'])
 
     # def cancel_payment(self, payment: OrderPayment):
 
