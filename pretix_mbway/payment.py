@@ -125,3 +125,135 @@ class MBWAY(BasePaymentProvider):
         d.move_to_end('description')
         d.move_to_end('_enabled', False)
         return d
+
+    def is_allowed(self, request: HttpRequest, total: Decimal = None) -> bool:
+        return super().is_allowed(request, total) and self.event.currency in SUPPORTED_CURRENCIES
+
+    def payment_is_valid_session(self, request):
+        return True
+
+    def payment_form_render(self, request) -> str:
+        template = get_template('pretix_mbway/checkout_payment_form.html')
+        ctx = {}
+        return template.render(ctx)
+
+    def checkout_prepare(self, request, cart):
+        return True
+
+    def checkout_confirm_render(self, request) -> str:
+        template = get_template('pretix_mbway/checkout_payment_confirm.html')
+        ctx = {}
+        return template.render(ctx)
+
+    def get_order_id(self, payment: OrderPayment) -> str:
+        try:
+            payment.info_data['order_id']
+        except KeyError:
+            new_info = payment.info_data['order_id'] = f'{payment.local_id % (10 ** 15) : 04d}'
+            payment.info_data( new_info )
+            payment.save()
+        return payment.info_data['order_id']
+
+    def _format_value(self, value: float):
+        return f'{value: .2f}'
+
+    def get_expire_date(self, payment: OrderPayment):
+        try:
+            payment.info_data['expire_date']
+        except KeyError:
+            today = now()
+            new_info = payment.info_data['expire_date'] = f'{today.year}{today.month}{today.day}'
+            payment.info_data(new_info)
+            payment.save()
+        return payment.info_data['expire_date']
+
+
+    def execute_payment(self, request: HttpRequest, payment: OrderPayment) -> str:
+        key_gateway = self.settings.get('ifthenpay_gateway_key', '')
+        id_order = self.get_order_id(payment)
+        amount = self._format_price(payment.amount)
+        description = self.settings.get('description', '')
+        language = request.headers.get('locale', 'en')
+        key_mbway = self.settings.get('mb_way_key', '')
+        expire_date = self.get_expire_date(payment)
+
+        if key_gateway == '' or id_order == '' or amount == '' or key_mbway == '':
+            logger.exception('IfThenPay Invalid Credentials')
+            raise PaymentException(_('IfThenPay Invalid credentials'))
+
+        api_url = f"https://ifthenpay.com/api/gateway/paybylink/get?gatewaykey={ key_gateway }&id={ id_order }&amount={ amount }&description={ description }&lang={ language }&expiredate={ expire_date }&accounts=MBWAY|{ key_mbway }"
+
+        ifthenpay_result = requests.get(api_url)
+
+        if ifthenpay_result.status_code == '200':
+            payment.state = payment.PAYMENT_STATE_PENDING
+            payment.save()
+            return self.ifthenpay_result
+        raise PaymentException('Something went wrong with the payment processing')
+
+    def calculate_fee(self, price: Decimal) -> Decimal:
+        return 0;
+
+    def payment_pending_render(self, request, payment) -> str:
+        template = get_template('pretix_mbway/pending.html')
+        ctx = {}
+        return template.render(ctx)
+
+    @property
+    def abort_pending_allowed(self) -> bool:
+        return False
+
+    # def render_invoice_text(self, order: Order, payment: OrderPayment) -> str:
+
+    def order_change_allowed(self, order: Order) -> bool:
+        return False
+
+    def payment_prepare(self, request: HttpRequest, payment: OrderPayment) -> Union[bool, str]:
+        return True
+
+    def payment_control_render(self, request: HttpRequest, payment: OrderPayment):
+        template = get_template('pretix_mbway/control.html')
+
+        id_order = self.get_order_id(payment)
+        amount = self._format_price(payment.amount)
+        description = self.settings.get('description', '')
+        language = request.headers.get('locale', 'en')
+        expire_date = self.get_expire_date(payment)
+        status = payment.state
+
+        ctx = {'id_order': id_order, 'amount': amount, 'description': description, 'language': language, 'expire_date': expire_date, 'status': status}
+        return template.render(ctx)
+
+    def payment_control_render_short(self, payment: OrderPayment) -> str:
+        return f'{ self.get_order_id(payment) }: { payment.state }'
+
+    def payment_refund_supported(self, payment: OrderPayment) -> bool:
+        return False
+
+    def payment_partial_refund_supported(self, payment: OrderPayment) -> bool:
+        return False
+
+    def api_payment_details(self, payment: OrderPayment):
+        return {
+            'id_order': self.get_order_id(payment),
+            'description': self.settings.get('description', ''),
+            'amount': payment.amount,
+            'status': payment.status,
+        }
+
+    def matching_id(self, payment: OrderPayment):
+        return self.get_order_id(payment)
+
+    def shred_payment_info(self, obj: Union[OrderPayment, OrderRefund]):
+        old = obj.info_data
+        new = {}
+        try:
+            new['order_id'] = old['order_id']
+            new['expire_date'] = old['expire_date']
+        except KeyError:
+            pass
+        obj.info_data( new )
+        obj.save()
+
+    # def cancel_payment(self, payment: OrderPayment):
+
