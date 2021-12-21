@@ -199,8 +199,8 @@ class MBWAY(BasePaymentProvider):
         payment.state = payment.PAYMENT_STATE_FAILED
         raise PaymentException(f'Something went wrong with the payment processing [ { ifthenpay_result.status_code } ]')
 
-    def calculate_fee(self, price: Decimal) -> Decimal:
-        return 0;
+    # def calculate_fee(self, price: Decimal) -> Decimal:
+    #     return 0;
 
     def payment_pending_render(self, request, payment) -> str:
         template = get_template('pretix_mbway/pending.html')
