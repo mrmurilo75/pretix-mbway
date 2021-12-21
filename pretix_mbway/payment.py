@@ -195,7 +195,7 @@ class MBWAY(BasePaymentProvider):
             payment.state = payment.PAYMENT_STATE_PENDING
             payment.save()
             return self.ifthenpay_result
-        raise PaymentException('Something went wrong with the payment processing')
+        raise PaymentException(f'Something went wrong with the payment processing [ { ifthenpay_result.status_code } ]')
 
     def calculate_fee(self, price: Decimal) -> Decimal:
         return 0;
