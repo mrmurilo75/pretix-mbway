@@ -64,7 +64,7 @@ SUPPORTED_CURRENCIES = ['EUR']
 
 class MBWAY(BasePaymentProvider):
     identifier = 'mbway'
-    verbose_name = _('MBWay')
+    verbose_name = _('MBWAY')
     payment_form_fields = OrderedDict([
     ])
 
@@ -75,7 +75,7 @@ class MBWAY(BasePaymentProvider):
     @property
     def test_mode_message(self):
         if self.settings.environment == 'test':
-            return _('The MB Way Plugin is being used in test mode')
+            return _('The MBWAY Plugin is being used in test mode')
         return None
 
     @property
@@ -92,7 +92,7 @@ class MBWAY(BasePaymentProvider):
              )),
             ('mb_way_key',
              forms.CharField(
-                 label=_('MB WAY Key'),
+                 label=_('MBWAY Key'),
                  required=True,
                  help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
                      text=_('Click here for more information'),
