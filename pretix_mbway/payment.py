@@ -125,8 +125,8 @@ class MBWAY(BasePaymentProvider):
                  label=_('Environment'),
                  initial='live',
                  choices=(
-                     ('live', 'Live'),
-                     ('test', 'Test'),
+                     ('gateway', 'Gateway'),
+                     ('form', 'Form'),
                  ),
              )),
         ]
@@ -155,11 +155,18 @@ class MBWAY(BasePaymentProvider):
         return True
 
     def payment_form_render(self, request) -> str:
+        if self.settings.get('environment') == 'gateway':
+            template = get_template('pretix_mbway/checkout_payment_form_gateway.html')
+            ctx = {}
+            return template.render(ctx)
+
         template = get_template('pretix_mbway/checkout_payment_form.html')
-        ctx = {'mbway_key': self.settings.get('mbway_key'),
-               'api_entrypoint': self._mbway_api_entrypoint,
+        ctx = {'api_entrypoint': self._mbway_api_entrypoint,
+               'mbway_key': self.settings.get('mbway_key'),
                'antiphishing_key': self.settings.get('antiphishing_key'),
-               ''
+               'channel': self.settings.get('channel'),
+               'paymentType': self._payment_type,
+               'description': self.settings.get('description'),
                }
         return template.render(ctx)
 
@@ -167,9 +174,18 @@ class MBWAY(BasePaymentProvider):
         return True
 
     def checkout_confirm_render(self, request) -> str:
+        if self.settings.get('environment') == 'gateway':
+            template = get_template('pretix_mbway/checkout_payment_confirm_gateway.html')
+            ctx = {}
+            return template.render(ctx)
+
         template = get_template('pretix_mbway/checkout_payment_confirm.html')
-        ctx = {}
+        ctx = {'telemovel': None,
+               'referencia': None,
+               'amount': None,
+              }
         return template.render(ctx)
+
 
     def get_order_id(self, payment: OrderPayment) -> str:
         if not payment.info:
