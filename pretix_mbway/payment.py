@@ -68,6 +68,9 @@ class MBWAY(BasePaymentProvider):
     payment_form_fields = OrderedDict([
     ])
 
+    _mbway_api_entrypoint = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx/'
+    _payment_type = 'ifthenpaymbway'
+
     def __init__(self, event: Event):
         super().__init__(event)
         self.settings = SettingsSandbox('payment', 'mbway', event)
@@ -81,22 +84,40 @@ class MBWAY(BasePaymentProvider):
     @property
     def settings_form_fields(self):
         fields = [
-            ('ifthenpay_gateway_key',
-             forms.CharField(
-                 label=_('IfThenPay Gateway Key'),
-                 required=True,
-                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
-                     text=_('Click here for more information'),
-                     docs_url='https://helpdesk.ifthenpay.com/en/support/solutions/articles/79000128524-api-generate-paybylink-url'
-                 )
-             )),
-            ('mb_way_key',
+            ('mbway_key',
              forms.CharField(
                  label=_('MBWAY Key'),
                  required=True,
                  help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
                      text=_('Click here for more information'),
+                     docs_url='https://helpdesk.ifthenpay.com/en/support/home'
+                 )
+             )),
+            ('ifthenpay_gateway_key',
+             forms.CharField(
+                 label=_('IfThenPay Gateway Key'),
+                 required=False,
+                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
+                     text=_('Click here for more information'),
                      docs_url='https://helpdesk.ifthenpay.com/en/support/solutions/articles/79000128524-api-generate-paybylink-url'
+                 )
+             )),
+            ('antiphishing_key',
+             forms.CharField(
+                 label=_('AntiPhishing Key'),
+                 required=False,
+                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
+                     text=_('Click here for more information'),
+                     docs_url='https://helpdesk.ifthenpay.com/en/support/home'
+                 )
+             )),
+            ('channel',
+             forms.CharField(
+                 label=_('Channel'),
+                 required=False,
+                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
+                     text=_('Click here for more information'),
+                     docs_url='https://helpdesk.ifthenpay.com/en/support/home'
                  )
              )),
             ('environment',
@@ -135,7 +156,11 @@ class MBWAY(BasePaymentProvider):
 
     def payment_form_render(self, request) -> str:
         template = get_template('pretix_mbway/checkout_payment_form.html')
-        ctx = {}
+        ctx = {'mbway_key': self.settings.get('mbway_key'),
+               'api_entrypoint': self._mbway_api_entrypoint,
+               'antiphishing_key': self.settings.get('antiphishing_key'),
+               ''
+               }
         return template.render(ctx)
 
     def checkout_prepare(self, request, cart):
@@ -180,7 +205,7 @@ class MBWAY(BasePaymentProvider):
         amount = self._format_price(payment.amount)
         description = self.settings.get('description', '')
         language = request.headers.get('locale', 'en')
-        key_mbway = self.settings.get('mb_way_key', '')
+        key_mbway = self.settings.get('mbway_key', '')
         expire_date = self.get_expire_date(payment)
 
         if key_gateway == '' or id_order == '' or amount == '' or key_mbway == '':
