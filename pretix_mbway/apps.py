@@ -33,7 +33,6 @@
 # License for the specific language governing permissions and limitations under the License.
 
 from django.apps import AppConfig
-from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 
 from pretix import __version__ as version
@@ -49,6 +48,3 @@ class MBWayApp(AppConfig):
         version = version
         category = 'PAYMENT'
         description = _("Plugin for use of MB Way payment system")
-
-    def ready(self):
-        from . import signals  # NOQA
