@@ -102,17 +102,6 @@ class MBWAY(BasePaymentProvider):
                      docs_url='https://helpdesk.ifthenpay.com/en/support/home'
                  )
              )),
-            '''     # not using it for now
-            ('antiphishing_key',
-             forms.CharField(
-                 label=_('AntiPhishing Key'),
-                 required=False,
-                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
-                     text=_('Click here for more information'),
-                     docs_url='https://helpdesk.ifthenpay.com/en/support/home'
-                 )
-             )),
-             '''
         ]
 
         extra_fields = [
