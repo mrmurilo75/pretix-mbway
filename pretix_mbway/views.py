@@ -32,11 +32,20 @@
 # distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations under the License.
 
+import json
+
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django_scopes import scopes_disabled
+
+from pretix.base.models import Event, Order, OrderPayment, OrderRefund, Quota
+from .models import MBWAYIfThenPayObject
 
 @csrf_exempt
 @require_POST
 @scopes_disabled()
-def webhook(request, *args, **kwargs):
+def callback(request, *args, **kwargs):
     try:
         idpedido = request.content_params['IdPedido']
     except IndexError:
