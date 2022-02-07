@@ -31,7 +31,7 @@
 # Unless required by applicable law or agreed to in writing, software distributed under the Apache License 2.0 is
 # distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations under the License.
-
+import decimal
 import json
 import requests
 import logging
@@ -68,7 +68,7 @@ class MBWAY(BasePaymentProvider):
     payment_form_fields = OrderedDict([
     ])
 
-    _mbway_api_entrypoint = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx/'
+    _mbway_api = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx'
     _payment_type = 'ifthenpaymbway'
 
     def __init__(self, event: Event):
@@ -93,24 +93,6 @@ class MBWAY(BasePaymentProvider):
                      docs_url='https://helpdesk.ifthenpay.com/en/support/home'
                  )
              )),
-            ('ifthenpay_gateway_key',
-             forms.CharField(
-                 label=_('IfThenPay Gateway Key'),
-                 required=False,
-                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
-                     text=_('Click here for more information'),
-                     docs_url='https://helpdesk.ifthenpay.com/en/support/solutions/articles/79000128524-api-generate-paybylink-url'
-                 )
-             )),
-            ('antiphishing_key',
-             forms.CharField(
-                 label=_('AntiPhishing Key'),
-                 required=False,
-                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
-                     text=_('Click here for more information'),
-                     docs_url='https://helpdesk.ifthenpay.com/en/support/home'
-                 )
-             )),
             ('channel',
              forms.CharField(
                  label=_('Channel'),
@@ -120,15 +102,17 @@ class MBWAY(BasePaymentProvider):
                      docs_url='https://helpdesk.ifthenpay.com/en/support/home'
                  )
              )),
-            ('environment',
-             forms.ChoiceField(
-                 label=_('Environment'),
-                 initial='live',
-                 choices=(
-                     ('gateway', 'Gateway'),
-                     ('form', 'Form'),
-                 ),
+            '''     # not using it for now
+            ('antiphishing_key',
+             forms.CharField(
+                 label=_('AntiPhishing Key'),
+                 required=False,
+                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
+                     text=_('Click here for more information'),
+                     docs_url='https://helpdesk.ifthenpay.com/en/support/home'
+                 )
              )),
+             '''
         ]
 
         extra_fields = [
@@ -155,93 +139,71 @@ class MBWAY(BasePaymentProvider):
         return True
 
     def payment_form_render(self, request) -> str:
-        if self.settings.get('environment') == 'gateway':
-            template = get_template('pretix_mbway/checkout_payment_form_gateway.html')
-            ctx = {}
-            return template.render(ctx)
-
         template = get_template('pretix_mbway/checkout_payment_form.html')
-        ctx = {'api_entrypoint': self._mbway_api_entrypoint,
-               'mbway_key': self.settings.get('mbway_key'),
-               'antiphishing_key': self.settings.get('antiphishing_key'),
-               'channel': self.settings.get('channel'),
-               'paymentType': self._payment_type,
-               'description': self.settings.get('description'),
-               }
+        ctx = {}
         return template.render(ctx)
 
     def checkout_prepare(self, request, cart):
-        return True
+        return request.session.get('telemovel', '') != ''
 
-    def checkout_confirm_render(self, request) -> str:
+    def checkout_confirm_render(self, request: HttpRequest, order: Order) -> str:
         if self.settings.get('environment') == 'gateway':
             template = get_template('pretix_mbway/checkout_payment_confirm_gateway.html')
             ctx = {}
             return template.render(ctx)
 
         template = get_template('pretix_mbway/checkout_payment_confirm.html')
-        ctx = {'telemovel': None,
-               'referencia': None,
-               'amount': None,
+        ctx = {'telemovel': request.session.get('telemovel', ''),
+               'referencia': self.settings.get('description', ''),
+               'amount': order.total,
               }
         return template.render(ctx)
 
 
-    def get_order_id(self, payment: OrderPayment) -> str:
-        if not payment.info:
-            payment.info = '{}'
-        old = json.loads(payment.info)
-        try:
-            old['order_id']
-        except KeyError:
-            old['order_id'] = f'{payment.local_id % (10 ** 15) : 04d}'
-            payment.info = json.dumps(old)
-            payment.save(update_fields=['info'])
-        return old['order_id']
-
     def _format_price(self, value: float):
         return f'{value: .2f}'
 
-    def get_expire_date(self, payment: OrderPayment):
-        if not payment.info:
-            payment.info = '{}'
-        old = json.loads(payment.info)
-        try:
-            old['expire_date']
-        except KeyError:
-            today = now()
-            old['expire_date'] = f'{today.year}{today.month}{today.day}'
-            payment.info = json.dumps(old)
-            payment.save(update_fields=['info'])
-        return old['expire_date']
-
     def execute_payment(self, request: HttpRequest, payment: OrderPayment) -> str:
-        key_gateway = self.settings.get('ifthenpay_gateway_key', '')
-        id_order = self.get_order_id(payment)
+        telemovel = request.session.get('telemovel', '')
+        if telemovel == '':
+            payment.state = payment.PAYMENT_STATE_FAILED
+            raise PaymentException(_(f'Something went wrong with the payment processing [ { request.status_code } ] : Phone number not in session'))
+
         amount = self._format_price(payment.amount)
-        description = self.settings.get('description', '')
-        language = request.headers.get('locale', 'en')
-        key_mbway = self.settings.get('mbway_key', '')
-        expire_date = self.get_expire_date(payment)
+        referencia = self.settings.get('description', '')
 
-        if key_gateway == '' or id_order == '' or amount == '' or key_mbway == '':
-            logger.exception('IfThenPay Invalid Credentials')
-            raise PaymentException(_('IfThenPay Invalid credentials'))
+        method = 'POST'
+        api_url = self._mbway_api + '/SetPedidoJSON'
+        header = {
+            'Content-type' : 'application/x-www-form-urlencoded',
+        }
+        content = {
+            'MbWayKey'   : self.settings.get('mbway_key', ''),
+            'Canal'      : self.settings.get('channel', ''),
+            'Referencia' : self.settings.get('description', ''),
+            'valor'      : amount,
+            'nrtlm'      : telemovel,
+            'email'      : '',
+            'descricao'  : self.settings.get('description', ''),
+        }
 
-        api_url = f"https://ifthenpay.com/api/gateway/paybylink/get?gatewaykey={ key_gateway }&id={ id_order }&amount={ amount }&description={ description }&lang={ language }&expiredate={ expire_date }&accounts=MBWAY|{ key_mbway }"
-
-        ifthenpay_result = requests.get(api_url)
-
-        if ifthenpay_result.status_code == '200':
+        result = requests.request(method, api_url, headers=header, data=content)
+        if result.status_code == '200':
+            obj, created = MBWAYIfThenPayObject.objects.get_or_create(
+                orderID   = result_json.get('IdPedido'),
+                mbway_key = self.settings.get('mbway_key', ''),
+                channel   = self.settings.get('channel', ''),
+                order     = payment.order,
+                payment   = payment,
+            )
+            obj.save()
+            payment['IdPedido'] = result_json.get('IdPedido')
             payment.state = payment.PAYMENT_STATE_PENDING
             payment.save()
-            return self.ifthenpay_result
+            return None
 
         payment.state = payment.PAYMENT_STATE_FAILED
-        raise PaymentException(f'Something went wrong with the payment processing [ { ifthenpay_result.status_code } ]')
-
-    # def calculate_fee(self, price: Decimal) -> Decimal:
-    #     return 0;
+        raise PaymentException(f'Something went wrong with the payment processing [ { result.status_code } ] : { result.text }')
 
     def payment_pending_render(self, request, payment) -> str:
         template = get_template('pretix_mbway/pending.html')
@@ -252,26 +214,14 @@ class MBWAY(BasePaymentProvider):
     def abort_pending_allowed(self) -> bool:
         return False
 
-    # def render_invoice_text(self, order: Order, payment: OrderPayment) -> str:
-
     def order_change_allowed(self, order: Order) -> bool:
         return False
 
     def payment_prepare(self, request: HttpRequest, payment: OrderPayment) -> Union[bool, str]:
-        return True
+        return request.session.get('telemovel', '') != ''
 
     def payment_control_render(self, request: HttpRequest, payment: OrderPayment):
-        template = get_template('pretix_mbway/control.html')
-
-        id_order = self.get_order_id(payment)
-        amount = self._format_price(payment.amount)
-        description = self.settings.get('description', '')
-        language = request.headers.get('locale', 'en')
-        expire_date = self.get_expire_date(payment)
-        status = payment.state
-
-        ctx = {'id_order': id_order, 'amount': amount, 'description': description, 'language': language, 'expire_date': expire_date, 'status': status}
-        return template.render(ctx)
+        return '{% load i18n %} <p>IfThenPay Payment ID : ' + str(payment['IdPedido']) + '</p>'
 
     def payment_control_render_short(self, payment: OrderPayment) -> str:
         return f'{ self.get_order_id(payment) }: { payment.state }'
@@ -284,26 +234,12 @@ class MBWAY(BasePaymentProvider):
 
     def api_payment_details(self, payment: OrderPayment):
         return {
-            'id_order': self.get_order_id(payment),
+            'order_id': payment['IdPedido'],
             'description': self.settings.get('description', ''),
             'amount': payment.amount,
             'status': payment.status,
         }
 
     def matching_id(self, payment: OrderPayment):
-        return self.get_order_id(payment)
-
-    def shred_payment_info(self, obj: Union[OrderPayment, OrderRefund]):
-        if obj.info:
-            new = {}
-            order_id = obj.info_data.get('order_id', '')
-            if order_id != '':
-                new['order_id'] = order_id
-            expire_date = obj.info_data.get('expire_date', '')
-            if expire_date != '':
-                new['expire_date'] = expire_date
-            obj.info_data = new
-            obj.save(update_fields=['info'])
-
-    # def cancel_payment(self, payment: OrderPayment):
+        return payment['IdPedido']
 

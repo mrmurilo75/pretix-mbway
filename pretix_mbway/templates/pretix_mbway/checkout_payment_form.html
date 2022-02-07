@@ -1,12 +1,10 @@
 {% load i18n %}
 
 <div class="form-horizontal mbway-container">
-    <input type="text" inputmode="numeric" maxlength="9" placeholder="910 123 456" name="telemovel" id="telemovel">
-
-    <input type="hidden" name="api_entrypoint" id="api_entrypoint" value="{{ api_entrypoint }}">
-    <input type="hidden" name="mbway_key" id="mbway_key" value="{{ mbway_key }}">
-    <input type="hidden" name="antiphishing_key" id="antiphishing_key" value="{{ antiphishing_key }}">
-    <input type="hidden" name="channel" id="channel" value="{{ channel }}">
-    <input type="hidden" name="paymentType" id="paymentType" value="{{ paymentType }}">
-    <input type="hidden" name="description" id="description" value="{{ description }}">
+    <input type="text" inputmode="numeric" maxlength="9" placeholder="910 123 456" name="telemovel" id="telemovel" oninput="save_telemovel_to_session()">
+    <script>
+        function save_telemovel_to_session() {
+            sessionStorage.setItem("telemovel", document.getElementById("telemovel").value);
+        }
+    </script>
 </div>
