@@ -34,6 +34,9 @@
 
 import json
 
+import pretix_mbway.payment
+import requests
+
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -47,12 +50,14 @@ from .models import MBWAYIfThenPayObject
 @scopes_disabled()
 def callback(request, *args, **kwargs):
     try:
-        idpedido = request.content_params['IdPedido']
+        idpedido = request.GET['idpedido']
     except IndexError:
         return HttpResponse(405)
 
-    order_obj = MBWAYIfThenPayObject.objects.get(pk=idpedido)
+    order_obj = MBWAYIfThenPayObject.objects.get(orderID=idpedido)
 
+    _mbway_api = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx'
+    api_url = _mbway_api + '/EstadoPedidosJSON'
     header = {
         'Content-type': 'application/x-www-form-urlencoded',
     }
@@ -62,7 +67,7 @@ def callback(request, *args, **kwargs):
         'idspagamento' : idpedido,
     }
 
-    estado = requests.request('POST', headers=header, data=content).json()['EstadoPedidos'][0]['Estado']
+    estado = requests.request('POST', api_url, headers=header, data=content).json()['EstadoPedidos'][0]['Estado']
 
     if estado == '000':
         try:

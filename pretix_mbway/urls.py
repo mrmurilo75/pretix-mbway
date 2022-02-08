@@ -21,11 +21,18 @@
 #
 from django.conf.urls import include, re_path
 
+from pretix.multidomain import event_url
+
 from .views import (
     callback,
 )
 
+event_patterns = [
+    re_path(r'^mbway/', include([
+        event_url(r'^webhook/$', callback, name='webhook', require_live=False),
+    ])),
+]
+
 urlpatterns = [
-    re_path(r'^mbway_test/$', callback, name='webhook'),
-    # re_path(r'^_mbway/webhook/$', callback, name='webhook'),
+    re_path(r'^_mbway/webhook/$', callback, name='webhook'),
 ]
