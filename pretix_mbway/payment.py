@@ -57,6 +57,8 @@ from pretix.base.settings import SettingsSandbox
 from pretix.helpers.urls import build_absolute_uri as build_global_uri
 from pretix.multidomain.urlreverse import build_absolute_uri
 
+from .models import MBWAYIfThenPayObject
+
 logger = logging.getLogger('pretix.plugins.mbway')
 
 SUPPORTED_CURRENCIES = ['EUR']
@@ -143,13 +145,19 @@ class MBWAY(BasePaymentProvider):
         return True
 
     def checkout_prepare(self, request, cart):
+        try:
+            telemovel = request.POST.get('payment_mbway-telemovel')
+        except KeyError:
+            messages.error(request,'Invalid request: Missing phone number')
+            return False
+        if telemovel > 10**9 and telemovel < 10**10:
+            request.session['telemovel'] = telemovel
         return request.session.get('telemovel', '') != ''
 
     def checkout_confirm_render(self, request, order: Order = None) -> str:
         template = get_template('pretix_mbway/checkout_payment_confirm.html')
         ctx = {'telemovel': request.session.get('telemovel', ''),
                'referencia': self.settings.get('description', ''),
-               'amount': order.total,
               }
         return template.render(ctx)
 
@@ -190,14 +198,12 @@ class MBWAY(BasePaymentProvider):
                 order     = payment.order,
                 payment   = payment,
             )
-            obj.save()
-            payment['IdPedido'] = result_json.get('IdPedido')
             payment.state = payment.PAYMENT_STATE_PENDING
             payment.save()
             return None
 
         payment.state = payment.PAYMENT_STATE_FAILED
-        raise PaymentException(f'Something went wrong with the payment processing [ { result.status_code } ] : { result.text }')
+        raise PaymentException(f':204: Something went wrong with the payment processing [ { result.status_code } ] : { result.text }')
 
     def payment_pending_render(self, request, payment) -> str:
         template = get_template('pretix_mbway/pending.html')
