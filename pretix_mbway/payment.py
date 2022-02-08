@@ -150,7 +150,7 @@ class MBWAY(BasePaymentProvider):
         except KeyError:
             messages.error(request,'Invalid request: Missing phone number')
             return False
-        if telemovel > 10**9 and telemovel < 10**10:
+        if int(telemovel) > 10**9 and int(telemovel) < 10**10:
             request.session['telemovel'] = telemovel
         return request.session.get('telemovel', '') != ''
 
@@ -190,9 +190,9 @@ class MBWAY(BasePaymentProvider):
         }
 
         result = requests.request(method, api_url, headers=header, data=content)
-        if result.status_code == '200':
+        if result.status_code == 200 and result.json()['Estado'] == '000':
             obj, created = MBWAYIfThenPayObject.objects.get_or_create(
-                orderID   = result_json.get('IdPedido'),
+                orderID   = result.json().get('IdPedido'),
                 mbway_key = self.settings.get('mbway_key', ''),
                 channel   = self.settings.get('channel', ''),
                 order     = payment.order,
