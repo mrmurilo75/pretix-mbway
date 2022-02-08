@@ -111,7 +111,7 @@ class MBWAY(BasePaymentProvider):
             ('channel',
              forms.CharField(
                  label=_('Channel'),
-                 required=False,
+                 required=True,
                  help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
                      text=_('Click here for more information'),
                      docs_url='https://helpdesk.ifthenpay.com/en/support/home'
@@ -123,8 +123,8 @@ class MBWAY(BasePaymentProvider):
             ('description',
              forms.CharField(
                  label=_('Reference description'),
-                 help_text=_('Any value entered here will be added to the call'),
-                 required=False,
+                 required=True,
+                 help_text=_('Any value entered here will be added as identification'),
              )),
         ]
 
@@ -145,12 +145,7 @@ class MBWAY(BasePaymentProvider):
     def checkout_prepare(self, request, cart):
         return request.session.get('telemovel', '') != ''
 
-    def checkout_confirm_render(self, request: HttpRequest, order: Order) -> str:
-        if self.settings.get('environment') == 'gateway':
-            template = get_template('pretix_mbway/checkout_payment_confirm_gateway.html')
-            ctx = {}
-            return template.render(ctx)
-
+    def checkout_confirm_render(self, request, order: Order = None) -> str:
         template = get_template('pretix_mbway/checkout_payment_confirm.html')
         ctx = {'telemovel': request.session.get('telemovel', ''),
                'referencia': self.settings.get('description', ''),
