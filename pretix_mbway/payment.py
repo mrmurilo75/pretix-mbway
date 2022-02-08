@@ -65,8 +65,23 @@ SUPPORTED_CURRENCIES = ['EUR']
 class MBWAY(BasePaymentProvider):
     identifier = 'mbway'
     verbose_name = _('MBWAY')
-    payment_form_fields = OrderedDict([
-    ])
+
+    @property
+    def payment_form_fields(self) -> dict:
+        fields = [
+            ('telemovel',
+             forms.IntegerField(
+                 label=_('Telemovel'),
+                 required=True,
+             )),
+        ]
+
+        d = OrderedDict(
+            fields
+        )
+
+        return d
+
 
     _mbway_api = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx'
     _payment_type = 'ifthenpaymbway'
