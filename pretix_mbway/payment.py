@@ -150,8 +150,7 @@ class MBWAY(BasePaymentProvider):
         except KeyError:
             messages.error(request,'Invalid request: Missing phone number')
             return False
-        if int(telemovel) > 10**9 and int(telemovel) < 10**10:
-            request.session['telemovel'] = telemovel
+        request.session['telemovel'] = telemovel
         return request.session.get('telemovel', '') != ''
 
     def checkout_confirm_render(self, request, order: Order = None) -> str:
