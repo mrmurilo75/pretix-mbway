@@ -74,7 +74,7 @@ def callback(request, *args, **kwargs):
             order_obj.payment.confirm()
         except Quota.QuotaExceededException:
             pass
-    else:
+    elif estado == '123':
         order_obj.payment.fail()
 
     return HttpResponse(status=200)
