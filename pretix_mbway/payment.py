@@ -142,11 +142,6 @@ class MBWAY(BasePaymentProvider):
     def payment_is_valid_session(self, request):
         return True
 
-    def payment_form_render(self, request) -> str:
-        template = get_template('pretix_mbway/checkout_payment_form.html')
-        ctx = {}
-        return template.render(ctx)
-
     def checkout_prepare(self, request, cart):
         return request.session.get('telemovel', '') != ''
 
