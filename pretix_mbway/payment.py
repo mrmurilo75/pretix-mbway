@@ -220,7 +220,7 @@ class MBWAY(BasePaymentProvider):
         return request.session.get('telemovel', '') != ''
 
     def payment_control_render(self, request: HttpRequest, payment: OrderPayment):
-        return '{% load i18n %} <p>IfThenPay Payment ID : ' + str(payment['IdPedido']) + '</p>'
+        return '<p>IfThenPay Payment ID : ' + MBWAYIfThenPayObject.objects.get(payment=payment).orderID + '</p>'
 
     def payment_control_render_short(self, payment: OrderPayment) -> str:
         return f'{ self.get_order_id(payment) }: { payment.state }'
