@@ -57,6 +57,8 @@ from pretix.base.settings import SettingsSandbox
 from pretix.helpers.urls import build_absolute_uri as build_global_uri
 from pretix.multidomain.urlreverse import build_absolute_uri
 
+from .ifthenpay import mbway
+
 from .models import MBWAYIfThenPayObject
 
 logger = logging.getLogger('pretix.plugins.mbway')
@@ -83,10 +85,6 @@ class MBWAY(BasePaymentProvider):
         )
 
         return d
-
-
-    _mbway_api = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx'
-    _payment_type = 'ifthenpaymbway'
 
     def __init__(self, event: Event):
         super().__init__(event)
@@ -170,39 +168,34 @@ class MBWAY(BasePaymentProvider):
             payment.state = payment.PAYMENT_STATE_FAILED
             raise PaymentException(_(f'Something went wrong with the payment processing [ { request.status_code } ] : Phone number not in session'))
 
+        mbway_key = self.settings.get('mbway_key', ''),
+        channel = self.settings.get('channel', ''),
+        description = self.settings.get('description', ''),
+
         amount = self._format_price(payment.amount)
-        referencia = self.settings.get('description', '')
 
-        method = 'POST'
-        api_url = self._mbway_api + '/SetPedidoJSON'
-        header = {
-            'Content-type' : 'application/x-www-form-urlencoded',
-        }
-        content = {
-            'MbWayKey'   : self.settings.get('mbway_key', ''),
-            'Canal'      : self.settings.get('channel', ''),
-            'Referencia' : self.settings.get('description', ''),
-            'valor'      : amount,
-            'nrtlm'      : telemovel,
-            'email'      : '',
-            'descricao'  : self.settings.get('description', ''),
-        }
+        result = mbway.require_payment(
+            mbway_key,
+            channel,
+            description,
+            description,
+            amount,
+            telemovel,
+        )
 
-        result = requests.request(method, api_url, headers=header, data=content)
-        if result.status_code == 200 and result.json()['Estado'] == '000':
-            obj, created = MBWAYIfThenPayObject.objects.get_or_create(
-                orderID   = result.json().get('IdPedido'),
-                mbway_key = self.settings.get('mbway_key', ''),
-                channel   = self.settings.get('channel', ''),
-                order     = payment.order,
-                payment   = payment,
+        if mbway.payment_required(result):      # TODO change this to use require_payment w/ try-catch
+            mbway.create_order(
+                result,
+                mbway_key,
+                channel,
+                payment
             )
             payment.state = payment.PAYMENT_STATE_PENDING
             payment.save()
             return None
 
         payment.state = payment.PAYMENT_STATE_FAILED
-        raise PaymentException(f':204: Something went wrong with the payment processing [ { result.status_code } ] : { result.text }')
+        raise PaymentException(f'Something went wrong with the payment processing [ { result.status_code } ] : { result.text }')
 
     def payment_pending_render(self, request, payment) -> str:
         template = get_template('pretix_mbway/pending.html')
@@ -220,7 +213,7 @@ class MBWAY(BasePaymentProvider):
         return request.session.get('telemovel', '') != ''
 
     def payment_control_render(self, request: HttpRequest, payment: OrderPayment):
-        return '<p>IfThenPay Payment ID : ' + MBWAYIfThenPayObject.objects.get(payment=payment).orderID + '</p>'
+        return f'<p>IfThenPay Payment ID : { mbway.get_order_by_payment(payment).orderID } </p>'
 
     def payment_control_render_short(self, payment: OrderPayment) -> str:
         return f'{ self.get_order_id(payment) }: { payment.state }'
@@ -233,12 +226,11 @@ class MBWAY(BasePaymentProvider):
 
     def api_payment_details(self, payment: OrderPayment):
         return {
-            'order_id': payment['IdPedido'],
+            'order_id': mbway.get_order_by_payment(payment).orderID,
             'description': self.settings.get('description', ''),
             'amount': payment.amount,
             'status': payment.status,
         }
 
     def matching_id(self, payment: OrderPayment):
-        return payment['IdPedido']
-
+        return mbway.get_order_by_payment(payment).orderID
