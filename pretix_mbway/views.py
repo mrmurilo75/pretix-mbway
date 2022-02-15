@@ -44,8 +44,7 @@ from django_scopes import scopes_disabled
 from pretix.base.models import Event, Order, OrderPayment, OrderRefund, Quota
 from .models import MBWAYIfThenPayObject
 
-ESTADO_PAGO = '000'
-ESTADO_CANCELADO = '123'
+from .ifthenpay import mbway
 
 @csrf_exempt
 @scopes_disabled()
@@ -55,28 +54,22 @@ def callback(request, *args, **kwargs):
     except IndexError:
         return HttpResponse(405)
 
-    order_obj = MBWAYIfThenPayObject.objects.get(orderID=idpedido)
+    mbw_order = mbway.get_order_by_id(idpedido)
+    state = mbway.get_payment_state(
+        mbway.require_state(
+            mbw_order.mbway_key,
+            mbw_order.channel,
+            mbw_order.orderID
+        )
+    )
 
-    _mbway_api = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx'
-    api_url = _mbway_api + '/EstadoPedidosJSON'
-    header = {
-        'Content-type': 'application/x-www-form-urlencoded',
-    }
-    content = {
-        'MbWayKey': order_obj.mbway_key,
-        'Canal': order_obj.channel,
-        'idspagamento' : idpedido,
-    }
-
-    estado = requests.request('POST', api_url, headers=header, data=content).json()['EstadoPedidos'][0]['Estado']
-
-    if estado == ESTADO_PAGO:
+    if state == mbway.STATE_PAID:
         try:
-            order_obj.payment.confirm()
+            mbw_order.payment.confirm()
         except Quota.QuotaExceededException:
             pass
-    elif estado == ESTADO_CANCELADO:
-        order_obj.payment.fail()
+    elif state == mbway.STATE_CANCELLED:
+        mbw_order.payment.fail()
 
     return HttpResponse(status=200)
 
