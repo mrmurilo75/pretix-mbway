@@ -23,6 +23,8 @@ def require_payment(mbwaykey, canal, referencia, descricao, valor, telemovel, em
     }
     result = requests.post(MBWAY_ENTRYPOINT + REQUIRE_PAYMENT_ENDPOINT, headers=_content_type_header, data=content)
 
+    # TODO if !request_accepted(result): raise exception
+
     return result
 
 def request_accepted(result):
@@ -38,6 +40,9 @@ def create_order(result, mbwaykey, canal, payment):
                 order     = payment.order,
                 payment   = payment,
             )
+
+    # TODO
+    #  if !created: raise exception
 
     return obj
 
@@ -57,4 +62,4 @@ def get_order_by_id(idpedido):
     return MBWAYIfThenPayObject.objects.get(orderID=idpedido)
 
 def get_order_by_payment(payment):
-    return MBWAYIfThenPayObject.objects.get(payment=payment)
+    return MBWAYIfThenPayObject.objects.get(payment=payment)    # TODO test

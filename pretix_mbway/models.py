@@ -27,4 +27,4 @@ class MBWAYIfThenPayObject(models.Model):
     mbway_key = models.CharField(max_length=11) # this is the account for ifthenpay but this can change per transaction
     channel = models.CharField(max_length=3)    # same reason as mbway key
     order = models.ForeignKey('pretixbase.Order', on_delete=models.CASCADE)
-    payment = models.ForeignKey('pretixbase.OrderPayment', null=True, blank=True, on_delete=models.CASCADE)
+    payment = models.ForeignKey('pretixbase.OrderPayment', null=True, blank=True, on_delete=models.CASCADE) #TODO -> we might need it to be unique os we can search by payment (on matching id for example) | -?-> is on cascade from deleted payment or if this is deleted it deletes the payment??
