@@ -39,14 +39,12 @@ import requests
 
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
 from django_scopes import scopes_disabled
 
 from pretix.base.models import Event, Order, OrderPayment, OrderRefund, Quota
 from .models import MBWAYIfThenPayObject
 
 @csrf_exempt
-@require_POST
 @scopes_disabled()
 def callback(request, *args, **kwargs):
     try:
