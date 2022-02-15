@@ -44,6 +44,9 @@ from django_scopes import scopes_disabled
 from pretix.base.models import Event, Order, OrderPayment, OrderRefund, Quota
 from .models import MBWAYIfThenPayObject
 
+ESTADO_PAGO = '000'
+ESTADO_CANCELADO = '123'
+
 @csrf_exempt
 @scopes_disabled()
 def callback(request, *args, **kwargs):
@@ -67,12 +70,12 @@ def callback(request, *args, **kwargs):
 
     estado = requests.request('POST', api_url, headers=header, data=content).json()['EstadoPedidos'][0]['Estado']
 
-    if estado == '000':
+    if estado == ESTADO_PAGO:
         try:
             order_obj.payment.confirm()
         except Quota.QuotaExceededException:
             pass
-    elif estado == '123':
+    elif estado == ESTADO_CANCELADO:
         order_obj.payment.fail()
 
     return HttpResponse(status=200)
