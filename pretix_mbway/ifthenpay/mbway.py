@@ -7,7 +7,8 @@ REQUIRE_PAYMENT_ENDPOINT = '/SetPedidoJSON'
 REQUIRE_STATE_ENDPOINT = '/EstadoPedidosJSON'
 
 STATE_PAID = '000'
-STATE_CANCELLED = '123'
+STATE_CANCELLED = '020'
+STATE_PENDING = '123'       # TODO it is also the state if user does not interact and it expires (there is no difference in pending and expired)
 
 _content_type_header = {
     'Content-type': 'application/x-www-form-urlencoded',
