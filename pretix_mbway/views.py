@@ -62,17 +62,10 @@ def callback(request, *args, **kwargs):
         mbw_order.orderID
     )
 
-    do_delete = False
     if state == mbway.STATE_PAID:
         mbw_order.payment.confirm(force=True)
-        do_delete = True
-
     elif state == mbway.STATE_CANCELLED:
         mbw_order.payment.fail()
-        do_delete = True
-
-    if do_delete:
-        mbw_order.delete()
 
     return HttpResponse(status=200)
 
