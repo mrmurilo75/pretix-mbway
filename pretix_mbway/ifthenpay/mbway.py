@@ -1,5 +1,6 @@
 import requests
 from .ifthenpayexception import IfThenPayException
+from ..models import MBWAYIfThenPayObject
 
 MBWAY_ENTRYPOINT = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx'
 REQUIRE_PAYMENT_ENDPOINT = '/SetPedidoJSON'
@@ -42,18 +43,13 @@ payment_required = request_accepted
 
 
 def create_order(result, mbwaykey, canal, payment):
-    created, obj = MBWAYIfThenPayObject.objects.get_or_create(
+    return MBWAYIfThenPayObject.objects.create(
         orderID=result.json().get('IdPedido'),
         mbway_key=mbwaykey,
         channel=canal,
         order=payment.order,
         payment=payment,
     )
-
-    # TODO
-    #  if !created: raise exception
-
-    return obj
 
 
 def get_payment_state(result):
