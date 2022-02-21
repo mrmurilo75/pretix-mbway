@@ -53,18 +53,22 @@ def create_order(result, mbwaykey, canal, payment):
     )
 
 
-def get_payment_state(result):
-    return result.json()['EstadoPedidos'][0]['Estado']
-
-
-def require_state(mbwaykey, canal, idpedido):
+def require_payment_state(mbwaykey, canal, idpedido):
     content = {
         'MbWayKey': mbwaykey,
         'Canal': canal,
         'idspagamento': idpedido,
     }
 
-    return requests.post(MBWAY_ENTRYPOINT + REQUIRE_STATE_ENDPOINT, headers=_content_type_header, data=content)
+    result = requests.post(MBWAY_ENTRYPOINT + REQUIRE_STATE_ENDPOINT, headers=_content_type_header, data=content)
+    print(result.json())
+
+    if result.status_code == 200:
+        res_json = result.json()
+        if res_json['EstadoPedidos'] == '000':
+            return res_json['EstadoPedidos'][0]['Estado']
+
+    return ''
 
 
 def get_order_by_id(idpedido):

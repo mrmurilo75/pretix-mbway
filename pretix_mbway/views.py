@@ -55,12 +55,11 @@ def callback(request, *args, **kwargs):
         return HttpResponse(405)
 
     mbw_order = mbway.get_order_by_id(idpedido)
-    state = mbway.get_payment_state(
-        mbway.require_state(
-            mbw_order.mbway_key,
-            mbw_order.channel,
-            mbw_order.orderID
-        )
+
+    state = mbway.require_payment_state(
+        mbw_order.mbway_key,
+        mbw_order.channel,
+        mbw_order.orderID
     )
 
     do_delete = False
