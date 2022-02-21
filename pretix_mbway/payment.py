@@ -168,9 +168,9 @@ class MBWAY(BasePaymentProvider):
             payment.state = payment.PAYMENT_STATE_FAILED
             raise PaymentException(_(f'Something went wrong with the payment processing [ { request.status_code } ] : Phone number not in session'))
 
-        mbway_key = self.settings.get('mbway_key', ''),
-        channel = self.settings.get('channel', ''),
-        description = self.settings.get('description', ''),
+        mbway_key = self.settings.get('mbway_key', '')
+        channel = self.settings.get('channel', '')
+        description = self.settings.get('description', '')
 
         amount = self._format_price(payment.amount)
 
