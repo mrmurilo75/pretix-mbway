@@ -183,7 +183,7 @@ class MBWAY(BasePaymentProvider):
             telemovel,
         )
 
-        if mbway.payment_required(result):      # TODO change this to use require_payment w/ try-catch
+        if mbway.payment_required(result):
             mbway.create_order(
                 result,
                 mbway_key,
