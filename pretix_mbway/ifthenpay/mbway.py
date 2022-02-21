@@ -1,4 +1,5 @@
 import requests
+from .ifthenpayexception import IfThenPayException
 
 MBWAY_ENTRYPOINT = 'https://mbway.ifthenpay.com/IfthenPayMBW.asmx'
 REQUIRE_PAYMENT_ENDPOINT = '/SetPedidoJSON'
@@ -24,13 +25,17 @@ def require_payment(mbwaykey, canal, referencia, descricao, valor, telemovel, em
     }
     result = requests.post(MBWAY_ENTRYPOINT + REQUIRE_PAYMENT_ENDPOINT, headers=_content_type_header, data=content)
 
-    # TODO if !request_accepted(result): raise exception
+    request_accepted(result)  # raises exception if not accepted
 
     return result
 
 
 def request_accepted(result):
-    return result.status_code == 200 and result.json()['Estado'] == '000'
+    if result.status_code != 200:
+        raise IfThenPayException('MBWay payment failed with status ' + result.status_code)
+    elif result.json()['Estado'] != '000':
+        raise IfThenPayException('MBWay payment failed with \'Estado\' ' + result.json()['Estado'])
+    return True
 
 
 payment_required = request_accepted
