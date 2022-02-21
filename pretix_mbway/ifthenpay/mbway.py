@@ -63,7 +63,7 @@ def require_state(mbwaykey, canal, idpedido):
         'idspagamento': idpedido,
     }
 
-    return requests.post(api_url, headers=_content_type_header, data=content)
+    return requests.post(MBWAY_ENTRYPOINT + REQUIRE_STATE_ENDPOINT, headers=_content_type_header, data=content)
 
 
 def get_order_by_id(idpedido):
