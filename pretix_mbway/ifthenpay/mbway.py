@@ -65,7 +65,7 @@ def require_payment_state(mbwaykey, canal, idpedido):
 
     if result.status_code == 200:
         res_json = result.json()
-        if res_json['EstadoPedidos'] == '000':
+        if res_json['Estado'] == '000':
             return res_json['EstadoPedidos'][0]['Estado']
 
     return ''
