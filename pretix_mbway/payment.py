@@ -31,44 +31,170 @@
 # Unless required by applicable law or agreed to in writing, software distributed under the Apache License 2.0 is
 # distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations under the License.
-import decimal
 import json
-import requests
 import logging
-import urllib.parse
 from collections import OrderedDict
+from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Union
+from typing import Union
 
+import requests
 from django import forms
 from django.contrib import messages
-from django.core import signing
 from django.http import HttpRequest
 from django.template.loader import get_template
-from django.urls import reverse
-from django.utils.timezone import now
-from django.utils.translation import gettext as __, gettext_lazy as _
-from i18nfield.strings import LazyI18nString
-
-from pretix.base.decimal import round_decimal
-from pretix.base.models import Event, Order, OrderPayment, OrderRefund, Quota
+from django.utils.translation import gettext_lazy as _
+from pretix.base.models import Event, Order, OrderPayment
 from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
-from pretix.helpers.urls import build_absolute_uri as build_global_uri
-from pretix.multidomain.urlreverse import build_absolute_uri
 
 from .ifthenpay import mbway
-
-from .models import MBWAYIfThenPayObject
+from .models import MBWAYGatewayObject
 
 logger = logging.getLogger('pretix.plugins.mbway')
 
 SUPPORTED_CURRENCIES = ['EUR']
 
+_sibs_api_endpoint = 'https://spg.qly.site1.sibs.pt/'
+_sibs_api_local = 'api/v1/payments'
+
 
 class MBWAY(BasePaymentProvider):
     identifier = 'mbway'
     verbose_name = _('MBWAY')
+
+    _spg_documentation = 'https://www.pay.sibs.com/documentacao/sibs-gateway/'
+    _sibs_api_market = 'https://developer.sibsapimarket.com/sandbox/node/3085'
+
+    def __init__(self, event: Event):
+        super().__init__(event)
+        self.settings = SettingsSandbox('payment', self.identifier, event)
+
+    @property
+    def settings_form_fields(self) -> dict:
+        fields = [
+            ('terminal_id',
+             forms.IntegerField(
+                 label=_('Terminal Id'),
+                 required=True,
+                 help_text=_(f'<p>Obtained on SIBS BackOffice, or provided by your bank</p>\n'
+                             f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+                             f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+                             ),
+                 max_value=10 ** 6,
+             )),
+            ('client_id',
+             forms.CharField(
+                 label=_('X-IBM-Client-Id'),
+                 required=True,
+                 help_text=_(f'<p>Obtained on SIBS BackOffice, or provided Onboarding</p>\n'
+                             f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+                             f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+                             ),
+             )),
+            ('access_token',
+             forms.CharField(
+                 label=_('Bearer / Access Token'),
+                 required=True,
+                 help_text=_(f'<p>Obtained on SIBS BackOffice</p>\n'
+                             f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+                             f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+                             ),
+             )),
+            ('payment_type',
+             forms.ChoiceField(
+                 label=_('Payment Type'),
+                 required=True,
+                 initial='AUTH',
+                 choices=(
+                     ('AUTH', _('For one time transactions - AUTH')),
+                     ('PURS', _('For two time transactions - PURS')),
+                 ),
+                 help_text=_(f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+                             f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+                             ),
+             )),
+            ('payment_entity',
+             forms.CharField(
+                 label=_('Payment Entity'),
+                 required=True,
+                 help_text=_(f'<p>Obtained on SIBS BackOffice, or provided by your bank</p>\n'
+                             f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+                             f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+                             ),
+             )),
+            ('payment_method',
+             forms.CharField(
+                 label=_('Payment Method'),
+                 required=False,
+                 help_text=_(f'<p>Selected when you sign the contract with the Bank</p>\n'
+                             f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+                             f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+                             ),
+             )),
+            ('merchant_id',
+             forms.CharField(
+                 label=_('Merchant Id'),
+                 required=True,
+                 help_text=_(f'<p>Unique id used by the merchant</p>\n'
+                             f'<p>For more info check <a target="_blank" href="{self._sibs_api_market}">'
+                             f'SIBS API Market</a></p>'
+                             ),
+             )),
+
+            # ('mb_way',
+            #  forms.BooleanField(
+            #      label=_('MB Way'),
+            #      required=False,
+            #      help_text=_(f'<p>Allow MB Way payment on Forms Integration</p>\n'
+            #                  f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+            #                  f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+            #                  ),
+            #  )),
+            # ('mb_reference',
+            #  forms.BooleanField(
+            #      label=_('MB Reference'),
+            #      required=False,
+            #      help_text=_(f'<p>Allow MB Reference payment on Forms Integration</p>\n'
+            #                  f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+            #                  f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+            #                  ),
+            #  )),
+            # ('credit_card',
+            #  forms.BooleanField(
+            #      label=_('Credit Card'),
+            #      required=False,
+            #      help_text=_(f'<p>Allow Credit Card payment on Forms Integration</p>\n'
+            #                  f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+            #                  f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+            #                  ),
+            #  )),
+        ]
+
+        extra_fields = [
+            ('description',
+             forms.CharField(
+                 label=_('Description'),
+                 required=True,
+                 help_text=_(f'<p>Arbitrary text to be added as transaction description in payment</p>\n'
+                             f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
+                             f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
+                             ),
+             )),
+        ]
+
+        d = OrderedDict(
+            fields + extra_fields + list(super().settings_form_fields.items())
+        )
+        d.move_to_end('_enabled', False)
+
+        return d
+
+    def payment_refund_supported(self, payment: OrderPayment) -> bool:
+        return True
+
+    def payment_partial_refund_supported(self, payment: OrderPayment) -> bool:
+        return True
 
     @property
     def payment_form_fields(self) -> dict:
@@ -77,6 +203,7 @@ class MBWAY(BasePaymentProvider):
              forms.IntegerField(
                  label=_('Telemovel'),
                  required=True,
+                 max_value=10 ** 10,
              )),
         ]
 
@@ -84,56 +211,6 @@ class MBWAY(BasePaymentProvider):
             fields
         )
 
-        return d
-
-    def __init__(self, event: Event):
-        super().__init__(event)
-        self.settings = SettingsSandbox('payment', 'mbway', event)
-
-    @property
-    def test_mode_message(self):
-        if self.settings.environment == 'test':
-            return _('The MBWAY Plugin is being used in test mode')
-        return None
-
-    @property
-    def settings_form_fields(self):
-        fields = [
-            ('mbway_key',
-             forms.CharField(
-                 label=_('MBWAY Key'),
-                 required=True,
-                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
-                     text=_('Click here for more information'),
-                     docs_url='https://helpdesk.ifthenpay.com/en/support/home'
-                 )
-             )),
-            ('channel',
-             forms.CharField(
-                 label=_('Channel'),
-                 required=True,
-                 help_text=_('<a target="_blank" rel="noopener" href="{docs_url}">{text}</a>').format(
-                     text=_('Click here for more information'),
-                     docs_url='https://helpdesk.ifthenpay.com/en/support/home'
-                 )
-             )),
-        ]
-
-        extra_fields = [
-            ('description',
-             forms.CharField(
-                 label=_('Reference description'),
-                 required=True,
-                 help_text=_('Any value entered here will be added as identification'),
-             )),
-        ]
-
-        d = OrderedDict(
-            fields + extra_fields + list(super().settings_form_fields.items())
-        )
-
-        d.move_to_end('description')
-        d.move_to_end('_enabled', False)
         return d
 
     def is_allowed(self, request: HttpRequest, total: Decimal = None) -> bool:
@@ -146,7 +223,7 @@ class MBWAY(BasePaymentProvider):
         try:
             telemovel = request.POST.get('payment_mbway-telemovel')
         except KeyError:
-            messages.error(request,'Invalid request: Missing phone number')
+            messages.error(request, 'Invalid request: Missing phone number')
             return False
         request.session['telemovel'] = telemovel
         return request.session.get('telemovel', '') != ''
@@ -155,82 +232,142 @@ class MBWAY(BasePaymentProvider):
         template = get_template('pretix_mbway/checkout_payment_confirm.html')
         ctx = {'telemovel': request.session.get('telemovel', ''),
                'referencia': self.settings.get('description', ''),
-              }
+               }
         return template.render(ctx)
-
-
-    def _format_price(self, value: float):
-        return f'{value: .2f}'
 
     def execute_payment(self, request: HttpRequest, payment: OrderPayment) -> str:
         telemovel = request.session.get('telemovel', '')
         if telemovel == '':
             payment.state = payment.PAYMENT_STATE_FAILED
-            raise PaymentException(_(f'Something went wrong with the payment processing [ { request.status_code } ] : Phone number not in session'))
+            raise PaymentException(
+                _(f'Something went wrong with the payment processing [ {request.status_code} ] : Phone number not in session'))
 
-        mbway_key = self.settings.get('mbway_key', '')
-        channel = self.settings.get('channel', '')
-        description = self.settings.get('description', '')
+        timestamp = datetime.now()
 
-        amount = self._format_price(payment.amount)
+        payment_methods = ['MBWAY']
+        amount = {
+            'value': float(payment.amount),
+            'currency': 'EUR'
+        }
+        merchant = {
+            'terminalId': self.settings.get('terminal_id', 00000, int),
+            'channel': 'web',
+            'merchantTransactionId': self.settings.get('merchant_id', 'SPG_DEFAULT_PRETIX'),
+        }
+        payment_reference = {
+            'initialDatetime': f'{timestamp.isoformat()}Z',
+            'finalDatetime': f'{datetime.fromtimestamp(timestamp.timestamp() + 24 * 3600).isoformat()}Z',  # 1 day
+            'maxAmount': amount,
+            'minAmount': amount,
+            'entity': self.settings.get('payment_entity', '24000')
+        }
+        transaction = {
+            'transactionTimestamp': timestamp.isoformat() + 'Z',
+            'description': self.settings.get('description', 'Pretix SIBS Payment Gateway'),
+            'moto': False,
+            'paymentType': self.settings.get('payment_type', 'AUTH'),
+            'amount': amount,
+            'paymentMethod': payment_methods,
+            'paymentReference': payment_reference,
+        }
 
-        result = mbway.require_payment(
-            mbway_key,
-            channel,
-            description,
-            description,
-            amount,
-            telemovel,
-        )
+        data = json.dumps({
+            'merchant': merchant,
+            'transaction': transaction,
+        }).replace("'", '"')
+        headers = {
+            'Authorization': 'Bearer {}'.format(self.settings.get('access_token', '')),
+            'X-IBM-Client-Id': self.settings.get('client_id', ''),
+            'Content-Type': 'application/json'
+        }
 
-        if mbway.payment_required(result):
-            mbway.create_order(
-                result,
-                mbway_key,
-                channel,
-                payment
-            )
-            payment.state = payment.PAYMENT_STATE_PENDING
+        checkout_sts = requests.post(_sibs_api_endpoint + _sibs_api_local, data=data, headers=headers)
+        checkout_sts = checkout_sts.json()
+
+        return_status = checkout_sts['returnStatus']
+        if return_status['statusCode'] != '000':
+            payment.state = payment.PAYMENT_STATE_FAILED
             payment.save()
-            return None
+            raise PaymentException(
+                _(f'Something went wrong with the payment processing [ {return_status["statusCode"]} ] : {return_status["statusMessage"]}'))
 
-        payment.state = payment.PAYMENT_STATE_FAILED
-        raise PaymentException(f'Something went wrong with the payment processing [ { result.status_code } ] : { result.text }')
+        # TODO MAKE ATOMIC
+        data = json.dumps({
+            'customerPhone': f'351#{telemovel}'
+        })
+        headers = {
+            'Authorization': f'Digest {checkout_sts["transactionSignature"]}',
+            'X-IBM-Client-Id': self.settings.get('client_id', ''),
+            'Content-Type': 'application/json'
+        }
+        print(headers)
+        print(data)
+
+        transaction_sts = requests.post(
+            f'{_sibs_api_endpoint}{_sibs_api_local}/{checkout_sts["transactionID"]}/mbway-id/purchase',
+            data=data, headers=headers).json()
+        print(transaction_sts)
+
+        return_status = transaction_sts['returnStatus']
+        if return_status['statusCode'] != '000':
+            payment.state = payment.PAYMENT_STATE_FAILED
+            payment.save()
+            raise PaymentException(
+                _(f'Something went wrong with the payment processing [ {return_status["statusCode"]} ] : {return_status["statusMessage"]}'))
+
+        MBWAYGatewayObject.objects.create(
+            transactionID=checkout_sts["transactionID"],
+            order=payment.order,
+            payment=payment,
+        )
+        payment.state = payment.PAYMENT_STATE_PENDING
+        payment.save()
+        return None
+
 
     def payment_pending_render(self, request, payment) -> str:
         template = get_template('pretix_mbway/pending.html')
         ctx = {}
         return template.render(ctx)
 
+
     @property
     def abort_pending_allowed(self) -> bool:
         return False
 
+
     def order_change_allowed(self, order: Order) -> bool:
         return False
+
 
     def payment_prepare(self, request: HttpRequest, payment: OrderPayment) -> Union[bool, str]:
         return request.session.get('telemovel', '') != ''
 
+
     def payment_control_render(self, request: HttpRequest, payment: OrderPayment):
-        return f'<p>IfThenPay Payment ID : { mbway.get_order_by_payment(payment).orderID } </p>'
+        print(MBWAYGatewayObject.objects.get(payment=payment).transactionID)
+        return f'<p>Transaction ID: {MBWAYGatewayObject.objects.get(payment=payment).transactionID} </p>'
+
 
     def payment_control_render_short(self, payment: OrderPayment) -> str:
-        return f'{ self.get_order_id(payment) }: { payment.state }'
+        return f'{MBWAYGatewayObject.objects.get(payment=payment).transactionID} : {payment.state}'
+
 
     def payment_refund_supported(self, payment: OrderPayment) -> bool:
-        return False
+        return True
+
 
     def payment_partial_refund_supported(self, payment: OrderPayment) -> bool:
-        return False
+        return True
+
 
     def api_payment_details(self, payment: OrderPayment):
         return {
-            'order_id': mbway.get_order_by_payment(payment).orderID,
-            'description': self.settings.get('description', ''),
+            'transaction_id': MBWAYGatewayObject.objects.get(payment=payment).transactionID,
             'amount': payment.amount,
             'status': payment.status,
         }
 
+
     def matching_id(self, payment: OrderPayment):
-        return mbway.get_order_by_payment(payment).orderID
+        return MBWAYGatewayObject.objects.get(payment=payment).transactionID

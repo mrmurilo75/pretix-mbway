@@ -28,3 +28,9 @@ class MBWAYIfThenPayObject(models.Model):
     channel = models.CharField(max_length=3)    # same reason as mbway key
     order = models.ForeignKey('pretixbase.Order', on_delete=models.CASCADE)
     payment = models.ForeignKey('pretixbase.OrderPayment', null=True, blank=True, on_delete=models.CASCADE) #TODO -> we might need it to be unique os we can search by payment (on matching id for example) | -?-> is on cascade from deleted payment or if this is deleted it deletes the payment??
+
+
+class MBWAYGatewayObject(models.Model):
+    transactionID = models.CharField(max_length=190, db_index=True, unique=True)
+    order = models.ForeignKey('pretixbase.Order', on_delete=models.CASCADE)
+    payment = models.ForeignKey('pretixbase.OrderPayment', null=True, blank=True, on_delete=models.CASCADE) #TODO -> we might need it to be unique os we can search by payment (on matching id for example) | -?-> is on cascade from deleted payment or if this is deleted it deletes the payment??
