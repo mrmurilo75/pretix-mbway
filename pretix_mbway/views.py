@@ -32,40 +32,31 @@
 # distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations under the License.
 
-import json
-
-import pretix_mbway.payment
-import requests
-
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django_scopes import scopes_disabled
 
-from pretix.base.models import Event, Order, OrderPayment, OrderRefund, Quota
-from .models import MBWAYIfThenPayObject
-
-from .ifthenpay import mbway
 
 @csrf_exempt
 @scopes_disabled()
 def callback(request, *args, **kwargs):
-    try:
-        idpedido = request.GET['idpedido']
-    except IndexError:
-        return HttpResponse(405)
-
-    mbw_order = mbway.get_order_by_id(idpedido)
-
-    state = mbway.require_payment_state(
-        mbw_order.mbway_key,
-        mbw_order.channel,
-        mbw_order.orderID
-    )
-
-    if state == mbway.STATE_PAID:
-        mbw_order.payment.confirm(force=True)
-    elif state == mbway.STATE_CANCELLED:
-        mbw_order.payment.fail()
-
+    # try:
+    #     idpedido = request.GET['transactionID']
+    # except IndexError:
+    #     return HttpResponse(405)
+    #
+    # mbw_order = mbway.get_order_by_id(idpedido)
+    #
+    # state = mbway.require_payment_state(
+    #     mbw_order.mbway_key,
+    #     mbw_order.channel,
+    #     mbw_order.orderID
+    # )
+    #
+    # if state == mbway.STATE_PAID:
+    #     mbw_order.payment.confirm(force=True)
+    # elif state == mbway.STATE_CANCELLED:
+    #     mbw_order.payment.fail()
+    #
+    # TODO ENDPOINT AS IN https://www.pay.sibs.com/documentacao/sibs-gateway/
     return HttpResponse(status=200)
-

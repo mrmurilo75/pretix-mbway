@@ -48,7 +48,6 @@ from pretix.base.models import Event, Order, OrderPayment
 from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
 
-from .ifthenpay import mbway
 from .models import MBWAYGatewayObject
 
 logger = logging.getLogger('pretix.plugins.mbway')
@@ -156,15 +155,6 @@ class MBWAY(BasePaymentProvider):
             #      label=_('MB Reference'),
             #      required=False,
             #      help_text=_(f'<p>Allow MB Reference payment on Forms Integration</p>\n'
-            #                  f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
-            #                  f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
-            #                  ),
-            #  )),
-            # ('credit_card',
-            #  forms.BooleanField(
-            #      label=_('Credit Card'),
-            #      required=False,
-            #      help_text=_(f'<p>Allow Credit Card payment on Forms Integration</p>\n'
             #                  f'<p>For more info check <a target="_blank" href="{self._spg_documentation}">'
             #                  f'SIBS PAYMENT GATEWAY - Getting Started</a></p>'
             #                  ),
@@ -324,42 +314,33 @@ class MBWAY(BasePaymentProvider):
         payment.save()
         return None
 
-
     def payment_pending_render(self, request, payment) -> str:
         template = get_template('pretix_mbway/pending.html')
         ctx = {}
         return template.render(ctx)
 
-
     @property
     def abort_pending_allowed(self) -> bool:
         return False
 
-
     def order_change_allowed(self, order: Order) -> bool:
         return False
 
-
     def payment_prepare(self, request: HttpRequest, payment: OrderPayment) -> Union[bool, str]:
         return request.session.get('telemovel', '') != ''
-
 
     def payment_control_render(self, request: HttpRequest, payment: OrderPayment):
         print(MBWAYGatewayObject.objects.get(payment=payment).transactionID)
         return f'<p>Transaction ID: {MBWAYGatewayObject.objects.get(payment=payment).transactionID} </p>'
 
-
     def payment_control_render_short(self, payment: OrderPayment) -> str:
         return f'{MBWAYGatewayObject.objects.get(payment=payment).transactionID} : {payment.state}'
-
 
     def payment_refund_supported(self, payment: OrderPayment) -> bool:
         return True
 
-
     def payment_partial_refund_supported(self, payment: OrderPayment) -> bool:
         return True
-
 
     def api_payment_details(self, payment: OrderPayment):
         return {
@@ -367,7 +348,6 @@ class MBWAY(BasePaymentProvider):
             'amount': payment.amount,
             'status': payment.status,
         }
-
 
     def matching_id(self, payment: OrderPayment):
         return MBWAYGatewayObject.objects.get(payment=payment).transactionID
