@@ -207,7 +207,7 @@ class MBWAY(BasePaymentProvider):
         return super().is_allowed(request, total) and self.event.currency in SUPPORTED_CURRENCIES
 
     def payment_is_valid_session(self, request):
-        return True
+        return request.session.get('telemovel', '') != ''
 
     def checkout_prepare(self, request, cart):
         try:
